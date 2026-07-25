@@ -11,11 +11,11 @@ pub enum Unit {
     Bytes,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, CosmicConfigEntry, Eq, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Clone, CosmicConfigEntry, PartialEq)]
 #[version = 1]
 pub struct BitrateAppletConfig {
     pub unit: Unit,
-    pub update_rate: u8,
+    pub update_rate: f32,
     pub show_download_speed: bool,
     pub show_upload_speed: bool,
 }
@@ -24,7 +24,7 @@ impl Default for BitrateAppletConfig {
     fn default() -> Self {
         BitrateAppletConfig {
             unit: Unit::Bytes,
-            update_rate: 1,
+            update_rate: 1.0,
             show_download_speed: true,
             show_upload_speed: true,
         }
