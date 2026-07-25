@@ -86,7 +86,7 @@ pub enum Message {
     UpdateNetworkInterfaces,
     UpdateSelectedNetworkInterface(usize),
     UnitChanged(segmented_button::Entity),
-    UpdateRateChanged(u8),
+    UpdateRateChanged(f32),
     ShowDownloadSpeedChanged(bool),
     ShowUploadSpeedChanged(bool),
     Rectangle(RectangleUpdate<u32>),
@@ -214,7 +214,7 @@ impl AppModel {
             // No decimal places if speed <= 1024 bits or Bytes
             format!("{:.0}", download_speed_rebase)
         };
-        let mut download_unit = String::new();
+        let mut download_unit = String::from(" ");
         if download_power >= 20 {
             download_unit.push_str(fl!("mega-short").as_str());
         } else if download_power >= 10 {
@@ -230,7 +230,7 @@ impl AppModel {
                     .push_str(format!("{}/{}", fl!("bytes-short"), fl!("second-short")).as_str());
             }
         }
-        download_unit.push_str("  ↓");
+        download_unit.push_str(" ↓");
         self.download_speed_display = download_speed_display;
         self.download_unit = download_unit;
     }
@@ -251,7 +251,7 @@ impl AppModel {
             // No decimal places if speed <= 1024 bits or Bytes
             format!("{:.0}", upload_speed_rebase)
         };
-        let mut upload_unit = String::new();
+        let mut upload_unit = String::from(" ");
         if upload_power >= 20 {
             upload_unit.push_str(fl!("mega-short").as_str());
         } else if upload_power >= 10 {
@@ -267,7 +267,7 @@ impl AppModel {
                     .push_str(format!("{}/{}", fl!("bytes-short"), fl!("second-short")).as_str());
             }
         }
-        upload_unit.push_str("  ↑");
+        upload_unit.push_str(" ↑");
         self.upload_speed_display = upload_speed_display;
         self.upload_unit = upload_unit;
     }
@@ -276,51 +276,39 @@ impl AppModel {
         let theme = cosmic::theme::active();
         let cosmic = theme.cosmic();
         let mut elements: Vec<Element<Message>> = Vec::new();
-        let mut widget_width = 0.0;
-        let row_width = self.data_width + cosmic.space_none() as f32 + self.unit_width;
 
         if self.config.show_download_speed {
             elements.push(
                 container(
                     row!(
                         container(self.core.applet.text(&self.download_speed_display))
-                            .align_left(self.data_width),
-                        container(self.core.applet.text(&self.download_unit))
-                            .align_right(self.unit_width),
+                            .align_right(self.data_width),
+                        self.core.applet.text(&self.download_unit),
                     )
                     .spacing(cosmic.space_none())
                     .clip(true),
                 )
-                .width(row_width)
                 .height(self.line_height)
                 .into(),
             );
-            widget_width += row_width;
         }
         if self.config.show_upload_speed {
-            if self.config.show_download_speed {
-                widget_width += cosmic.space_xs() as f32;
-            }
             elements.push(
                 container(
                     row!(
                         container(self.core.applet.text(&self.upload_speed_display))
-                            .align_left(self.data_width),
-                        container(self.core.applet.text(&self.upload_unit))
-                            .align_right(self.unit_width),
+                            .align_right(self.data_width),
+                        self.core.applet.text(&self.upload_unit),
                     )
                     .spacing(cosmic.space_none())
                     .clip(true),
                 )
-                .width(row_width)
                 .height(self.line_height)
                 .into(),
             );
-            widget_width += row_width;
         }
 
         let padding = self.core.applet.suggested_padding(true);
-        widget_width += 2.0 * padding.0 as f32;
         container(
             Row::from_vec(elements)
                 .spacing(cosmic.space_xs())
@@ -329,7 +317,6 @@ impl AppModel {
         .align_y(Alignment::Center)
         .padding([padding.1, padding.0])
         .height(self.line_height + 2.0 * padding.1 as f32)
-        .width(widget_width)
         .into()
     }
 }
@@ -423,7 +410,7 @@ impl cosmic::Application for AppModel {
             Err((_, cosmic_tk)) => cosmic_tk.interface_font,
         };
         app.data_width = app.get_text_width_and_height("00.00", &interface_font).0;
-        app.unit_width = app.get_text_width_and_height("Mb/s  ↓", &interface_font).0;
+        app.unit_width = app.get_text_width_and_height(" Mb/s  ↓", &interface_font).0;
         app.line_height = app
             .get_text_width_and_height("1234567890.KM/Bb↓↑", &interface_font)
             .1;
@@ -468,7 +455,7 @@ impl cosmic::Application for AppModel {
                         .on_press_down(Message::TogglePopup)
                         .class(cosmic::theme::Button::AppletIcon),
                     format!(
-                        "{} {}  {} {}",
+                        "{}{}  {}{}",
                         self.download_speed_display,
                         self.download_unit,
                         self.upload_speed_display,
@@ -524,9 +511,9 @@ impl cosmic::Application for AppModel {
                 spin_button::spin_button(
                     format!("{} {}", self.config.update_rate, fl!("second-short")),
                     self.config.update_rate,
-                    1,
-                    1,
-                    10,
+                    0.5,
+                    0.5,
+                    10.0,
                     Message::UpdateRateChanged,
                 ),
             )),
@@ -550,8 +537,8 @@ impl cosmic::Application for AppModel {
     fn subscription(&self) -> Subscription<Self::Message> {
         Subscription::batch(vec![
             rectangle_tracker_subscription(0).map(|e| Message::Rectangle(e.1)),
-            (iced::time::every(tokio::time::Duration::from_secs(
-                self.config.update_rate as u64,
+            (iced::time::every(tokio::time::Duration::from_millis(
+                (self.config.update_rate * 1000.0) as u64,
             )))
             .map(|_| Message::UpdateBandwidth),
             (iced::time::every(tokio::time::Duration::from_secs(5)))
@@ -575,22 +562,24 @@ impl cosmic::Application for AppModel {
                     if let Some(received_bytes_cur) =
                         network::get_received_bytes(network_interface.as_ref())
                     {
-                        self.download_speed = received_bytes_cur - self.received_bytes;
+                        let diff = received_bytes_cur.saturating_sub(self.received_bytes) as f64;
+                        let mut speed = diff / (self.config.update_rate as f64);
                         if self.config.unit == Unit::Bits {
-                            self.download_speed *= 8;
+                            speed *= 8.0;
                         }
-                        self.download_speed /= self.config.update_rate as u64;
+                        self.download_speed = speed.round() as u64;
                         self.received_bytes = received_bytes_cur;
                         self.set_download_speed_display();
                     }
                     if let Some(sent_bytes_cur) =
                         network::get_sent_bytes(network_interface.as_ref())
                     {
-                        self.upload_speed = sent_bytes_cur - self.sent_bytes;
+                        let diff = sent_bytes_cur.saturating_sub(self.sent_bytes) as f64;
+                        let mut speed = diff / (self.config.update_rate as f64);
                         if self.config.unit == Unit::Bits {
-                            self.upload_speed *= 8;
+                            speed *= 8.0;
                         }
-                        self.upload_speed /= self.config.update_rate as u64;
+                        self.upload_speed = speed.round() as u64;
                         self.sent_bytes = sent_bytes_cur;
                         self.set_upload_speed_display();
                     }
@@ -706,7 +695,7 @@ impl cosmic::Application for AppModel {
                     .get_text_width_and_height("00.00", &theme.interface_font)
                     .0;
                 self.unit_width = self
-                    .get_text_width_and_height("Mb/s  ↓", &theme.interface_font)
+                    .get_text_width_and_height(" Mb/s  ↓", &theme.interface_font)
                     .0;
                 self.line_height = self
                     .get_text_width_and_height("1234567890.KM/Bb↓↑", &theme.interface_font)
