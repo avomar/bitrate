@@ -12,7 +12,7 @@ use {
         iced::{
             self, Alignment, Limits, Rectangle, Subscription,
             advanced::graphics::text::cosmic_text::{self, Buffer, FontSystem, Metrics, Shaping},
-            widget::{column, row},
+            widget::{column, row, horizontal_space},
             window,
         },
         iced_widget::Row,
@@ -71,8 +71,7 @@ pub struct AppModel {
     rectangle_tracker: Option<RectangleTracker<u32>>,
     rectangle: Rectangle,
     font_system: FontSystem,
-    unit_width: f32,
-    data_width: f32,
+    max_row_width: f32,
     line_height: f32,
 }
 
@@ -230,7 +229,7 @@ impl AppModel {
                     .push_str(format!("{}/{}", fl!("bytes-short"), fl!("second-short")).as_str());
             }
         }
-        download_unit.push_str("  ↓");
+        download_unit.push_str("↓");
         self.download_speed_display = download_speed_display;
         self.download_unit = download_unit;
     }
@@ -267,7 +266,7 @@ impl AppModel {
                     .push_str(format!("{}/{}", fl!("bytes-short"), fl!("second-short")).as_str());
             }
         }
-        upload_unit.push_str("  ↑");
+        upload_unit.push_str("↑");
         self.upload_speed_display = upload_speed_display;
         self.upload_unit = upload_unit;
     }
@@ -276,60 +275,54 @@ impl AppModel {
         let theme = cosmic::theme::active();
         let cosmic = theme.cosmic();
         let mut elements: Vec<Element<Message>> = Vec::new();
-        let mut widget_width = 0.0;
-        let row_width = self.data_width + cosmic.space_none() as f32 + self.unit_width;
 
         if self.config.show_download_speed {
             elements.push(
                 container(
                     row!(
-                        container(self.core.applet.text(&self.download_speed_display))
-                            .align_left(self.data_width),
-                        container(self.core.applet.text(&self.download_unit))
-                            .align_right(self.unit_width),
+                        self.core.applet.text(&self.download_speed_display)
+                            .width(iced::Length::Shrink),
+                        horizontal_space().width(iced::Length::Fill),
+                        self.core.applet.text(&self.download_unit)
+                            .width(iced::Length::Shrink)
                     )
-                    .spacing(cosmic.space_none())
-                    .clip(true),
+                    .align_y(Alignment::Center)
                 )
-                .width(row_width)
+                .width(self.max_row_width)
                 .height(self.line_height)
                 .into(),
             );
-            widget_width += row_width;
         }
+
         if self.config.show_upload_speed {
-            if self.config.show_download_speed {
-                widget_width += cosmic.space_xs() as f32;
-            }
             elements.push(
                 container(
                     row!(
-                        container(self.core.applet.text(&self.upload_speed_display))
-                            .align_left(self.data_width),
-                        container(self.core.applet.text(&self.upload_unit))
-                            .align_right(self.unit_width),
+                        self.core.applet.text(&self.upload_speed_display)
+                            .width(iced::Length::Shrink),
+                        horizontal_space().width(iced::Length::Fill),
+                        self.core.applet.text(&self.upload_unit)
+                            .width(iced::Length::Shrink)
                     )
-                    .spacing(cosmic.space_none())
-                    .clip(true),
+                    .align_y(Alignment::Center)
                 )
-                .width(row_width)
+                .width(self.max_row_width)
                 .height(self.line_height)
                 .into(),
             );
-            widget_width += row_width;
         }
 
         let padding = self.core.applet.suggested_padding(true);
-        widget_width += 2.0 * padding.0 as f32;
         container(
             Row::from_vec(elements)
                 .spacing(cosmic.space_xs())
+                .align_y(Alignment::Center)
                 .clip(true),
         )
         .align_y(Alignment::Center)
         .padding([padding.1, padding.0])
         .height(self.line_height + 2.0 * padding.1 as f32)
-        .width(widget_width)
+        .width(iced::Length::Shrink)
         .into()
     }
 }
@@ -410,8 +403,7 @@ impl cosmic::Application for AppModel {
             rectangle: Rectangle::default(),
             rectangle_tracker: None,
             font_system: FontSystem::new(),
-            unit_width: 0.0,
-            data_width: 0.0,
+            max_row_width: 0.0,
             line_height: 0.0,
         };
         app.set_download_speed_display();
@@ -422,8 +414,7 @@ impl cosmic::Application for AppModel {
             Ok(cosmic_tk) => cosmic_tk.interface_font,
             Err((_, cosmic_tk)) => cosmic_tk.interface_font,
         };
-        app.data_width = app.get_text_width_and_height("00.00", &interface_font).0;
-        app.unit_width = app.get_text_width_and_height("Mb/s  ↓", &interface_font).0;
+        app.max_row_width = app.get_text_width_and_height("00.00MB/s↓", &interface_font).0;
         app.line_height = app
             .get_text_width_and_height("1234567890.KM/Bb↓↑", &interface_font)
             .1;
@@ -702,11 +693,8 @@ impl cosmic::Application for AppModel {
                 };
             }
             Message::ThemeChanged(theme) => {
-                self.data_width = self
-                    .get_text_width_and_height("00.00", &theme.interface_font)
-                    .0;
-                self.unit_width = self
-                    .get_text_width_and_height("Mb/s  ↓", &theme.interface_font)
+                self.max_row_width = self
+                    .get_text_width_and_height("00.00MB/s↓", &theme.interface_font)
                     .0;
                 self.line_height = self
                     .get_text_width_and_height("1234567890.KM/Bb↓↑", &theme.interface_font)
