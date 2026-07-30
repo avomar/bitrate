@@ -412,7 +412,7 @@ impl cosmic::Application for AppModel {
             Err((_, cosmic_tk)) => cosmic_tk.interface_font,
         };
         app.data_width = app.get_text_width_and_height("00.00", &interface_font).0;
-        app.unit_width = app.get_text_width_and_height("Mb/s  ↓", &interface_font).0;
+        app.unit_width = app.get_text_width_and_height("MB/s  ↓", &interface_font).0;
         app.line_height = app
             .get_text_width_and_height("1234567890.KM/Bb↓↑", &interface_font)
             .1;
@@ -695,7 +695,7 @@ impl cosmic::Application for AppModel {
                     .get_text_width_and_height("00.00", &theme.interface_font)
                     .0;
                 self.unit_width = self
-                    .get_text_width_and_height("Mb/s  ↓", &theme.interface_font)
+                    .get_text_width_and_height("MB/s  ↓", &theme.interface_font)
                     .0;
                 self.line_height = self
                     .get_text_width_and_height("1234567890.KM/Bb↓↑", &theme.interface_font)
