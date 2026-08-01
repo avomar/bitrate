@@ -18,6 +18,7 @@ pub struct BitrateAppletConfig {
     pub update_rate: u8,
     pub show_download_speed: bool,
     pub show_upload_speed: bool,
+    pub show_total_data_used: bool,
 }
 
 impl Default for BitrateAppletConfig {
@@ -27,6 +28,7 @@ impl Default for BitrateAppletConfig {
             update_rate: 1,
             show_download_speed: true,
             show_upload_speed: true,
+            show_total_data_used: false,
         }
     }
 }

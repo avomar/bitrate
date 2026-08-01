@@ -60,6 +60,10 @@ pub struct AppModel {
     upload_speed: u64,
     upload_speed_display: String,
     upload_unit: String,
+    /// Total data used
+    total_data_used: u64,
+    total_data_used_display: String,
+    total_data_unit: String,
     /// Unit model
     unit_model: segmented_button::SingleSelectModel,
     /// Bits Entity
@@ -87,6 +91,7 @@ pub enum Message {
     UpdateRateChanged(u8),
     ShowDownloadSpeedChanged(bool),
     ShowUploadSpeedChanged(bool),
+    ShowTotalDataUsedChanged(bool),
     Rectangle(RectangleUpdate<u32>),
     ThemeChanged(cosmic::config::CosmicTk),
     Surface(surface::Action),
@@ -261,6 +266,43 @@ impl AppModel {
         self.upload_unit = upload_unit;
     }
 
+    fn set_total_data_used_display(&mut self) {
+        let total_data_used = if self.config.unit == Unit::Bits {
+            self.total_data_used.saturating_mul(8)
+        } else {
+            self.total_data_used
+        };
+
+        let total_data_power = if total_data_used > 0 {
+            total_data_used.ilog2()
+        } else {
+            0
+        };
+        let total_data_rebase =
+            total_data_used as f64 / 2u64.pow(total_data_power - total_data_power % 10) as f64;
+        let total_data_used_display = if total_data_power >= 10 {
+            self.format_speed(total_data_rebase)
+        } else {
+            format!("{:.0}", total_data_rebase)
+        };
+        let mut total_data_unit = String::new();
+        if total_data_power >= 30 {
+            total_data_unit.push_str(fl!("giga-short").as_str());
+        } else if total_data_power >= 20 {
+            total_data_unit.push_str(fl!("mega-short").as_str());
+        } else if total_data_power >= 10 {
+            total_data_unit.push_str(fl!("kilo-short").as_str());
+        }
+        match self.config.unit {
+            Unit::Bits => total_data_unit.push_str(fl!("bits-short").as_str()),
+            Unit::Bytes => total_data_unit.push_str(fl!("bytes-short").as_str()),
+        }
+
+        total_data_unit.push_str(" ↓↑");
+        self.total_data_used_display = total_data_used_display;
+        self.total_data_unit = total_data_unit;
+    }
+
     fn horizontal_layout(&self) -> Element<'_, Message> {
         let theme = cosmic::theme::active();
         let cosmic = theme.cosmic();
@@ -296,6 +338,24 @@ impl AppModel {
                         container(self.core.applet.text(&self.upload_speed_display))
                             .align_left(self.data_width),
                         container(self.core.applet.text(&self.upload_unit))
+                            .align_right(self.unit_width),
+                    )
+                    .spacing(cosmic.space_none())
+                    .clip(true),
+                )
+                .width(row_width)
+                .height(self.line_height)
+                .into(),
+            );
+            widget_width += row_width;
+        }
+        if self.config.show_total_data_used {
+            elements.push(
+                container(
+                    row!(
+                        container(self.core.applet.text(&self.total_data_used_display))
+                            .align_left(self.data_width),
+                        container(self.core.applet.text(&self.total_data_unit))
                             .align_right(self.unit_width),
                     )
                     .spacing(cosmic.space_none())
@@ -371,10 +431,12 @@ impl cosmic::Application for AppModel {
         let mut selected_network_interface: Option<usize> = None;
         let mut received_bytes = 0;
         let mut sent_bytes = 0;
+        let mut total_data_used = 0;
         if let Some(interface) = network_interfaces.get(0) {
             selected_network_interface = Some(0);
             received_bytes = network::get_received_bytes(interface).unwrap_or(0);
             sent_bytes = network::get_sent_bytes(interface).unwrap_or(0);
+            total_data_used = received_bytes.checked_add(sent_bytes).unwrap_or(0);
         }
 
         // Construct the app model with the runtime's core.
@@ -391,6 +453,9 @@ impl cosmic::Application for AppModel {
             upload_speed: 0,
             upload_speed_display: "".to_string(),
             upload_unit: "".to_string(),
+            total_data_unit: "".to_string(),
+            total_data_used,
+            total_data_used_display: "".to_string(),
             network_interfaces: network_interfaces,
             selected_network_interface,
             unit_model,
@@ -405,6 +470,7 @@ impl cosmic::Application for AppModel {
         };
         app.set_download_speed_display();
         app.set_upload_speed_display();
+        app.set_total_data_used_display();
         let interface_font = match CosmicTk::get_entry(
             &Config::new("com.system76.CosmicTk", CosmicTk::VERSION).unwrap(),
         ) {
@@ -438,7 +504,11 @@ impl cosmic::Application for AppModel {
         let button: Element<'_, Self::Message>;
         // TODO: Try with single autosize_id after iced rebase to 0.14
         let autosize_id: widget::Id;
-        if is_horizontal && (self.config.show_download_speed || self.config.show_upload_speed) {
+        if is_horizontal
+            && (self.config.show_download_speed
+                || self.config.show_upload_speed
+                || self.config.show_total_data_used)
+        {
             autosize_id = AUTOSIZE_MAIN_ID.clone();
             button = button::custom(self.horizontal_layout())
                 .padding(0)
@@ -529,6 +599,12 @@ impl cosmic::Application for AppModel {
             padded_control(widget::settings::item(
                 fl!("show-upload-speed"),
                 toggler(self.config.show_upload_speed).on_toggle(Message::ShowUploadSpeedChanged)
+            )),
+            padded_control(widget::divider::horizontal::default()).padding([space_xxs, space_s]),
+            padded_control(widget::settings::item(
+                fl!("show-total-data-used"),
+                toggler(self.config.show_total_data_used)
+                    .on_toggle(Message::ShowTotalDataUsedChanged)
             ))
         )
         .padding([8, 0]);
@@ -561,9 +637,11 @@ impl cosmic::Application for AppModel {
                 if let Some(selected_network_interface) = self.selected_network_interface {
                     let network_interface =
                         self.network_interfaces[selected_network_interface].clone();
-                    if let Some(received_bytes_cur) =
-                        network::get_received_bytes(network_interface.as_ref())
-                    {
+                    let received_bytes_cur =
+                        network::get_received_bytes(network_interface.as_ref());
+                    let sent_bytes_cur = network::get_sent_bytes(network_interface.as_ref());
+
+                    if let Some(received_bytes_cur) = received_bytes_cur {
                         self.download_speed = received_bytes_cur - self.received_bytes;
                         if self.config.unit == Unit::Bits {
                             self.download_speed *= 8;
@@ -572,9 +650,7 @@ impl cosmic::Application for AppModel {
                         self.received_bytes = received_bytes_cur;
                         self.set_download_speed_display();
                     }
-                    if let Some(sent_bytes_cur) =
-                        network::get_sent_bytes(network_interface.as_ref())
-                    {
+                    if let Some(sent_bytes_cur) = sent_bytes_cur {
                         self.upload_speed = sent_bytes_cur - self.sent_bytes;
                         if self.config.unit == Unit::Bits {
                             self.upload_speed *= 8;
@@ -583,9 +659,17 @@ impl cosmic::Application for AppModel {
                         self.sent_bytes = sent_bytes_cur;
                         self.set_upload_speed_display();
                     }
+                    if let (Some(received_bytes_cur), Some(sent_bytes_cur)) =
+                        (received_bytes_cur, sent_bytes_cur)
+                    {
+                        self.total_data_used =
+                            received_bytes_cur.checked_add(sent_bytes_cur).unwrap_or(0);
+                    }
+                    self.set_total_data_used_display();
                 } else {
                     self.download_speed = 0;
                     self.upload_speed = 0;
+                    self.total_data_used = 0;
                 }
             }
             Message::UpdateNetworkInterfaces => {
@@ -615,6 +699,11 @@ impl cosmic::Application for AppModel {
                 let interface = self.network_interfaces.get(0).unwrap();
                 self.received_bytes = network::get_received_bytes(interface).unwrap_or(0);
                 self.sent_bytes = network::get_sent_bytes(interface).unwrap_or(0);
+                self.total_data_used = self
+                    .received_bytes
+                    .checked_add(self.sent_bytes)
+                    .unwrap_or(0);
+                self.set_total_data_used_display();
             }
             Message::UnitChanged(entity) => {
                 if !self.unit_model.is_active(entity) {
@@ -634,6 +723,7 @@ impl cosmic::Application for AppModel {
                     }
                     self.set_download_speed_display();
                     self.set_upload_speed_display();
+                    self.set_total_data_used_display();
                 }
             }
             Message::UpdateRateChanged(rate) => {
@@ -642,13 +732,36 @@ impl cosmic::Application for AppModel {
                     .unwrap();
             }
             Message::ShowDownloadSpeedChanged(show) => {
+                if show && self.config.show_total_data_used {
+                    self.config
+                        .set_show_total_data_used(&self.config_helper, false)
+                        .unwrap();
+                }
                 self.config
                     .set_show_download_speed(&self.config_helper, show)
                     .unwrap();
             }
             Message::ShowUploadSpeedChanged(show) => {
+                if show && self.config.show_total_data_used {
+                    self.config
+                        .set_show_total_data_used(&self.config_helper, false)
+                        .unwrap();
+                }
                 self.config
                     .set_show_upload_speed(&self.config_helper, show)
+                    .unwrap();
+            }
+            Message::ShowTotalDataUsedChanged(show) => {
+                if show {
+                    self.config
+                        .set_show_download_speed(&self.config_helper, false)
+                        .unwrap();
+                    self.config
+                        .set_show_upload_speed(&self.config_helper, false)
+                        .unwrap();
+                }
+                self.config
+                    .set_show_total_data_used(&self.config_helper, show)
                     .unwrap();
             }
             Message::Rectangle(u) => match u {
