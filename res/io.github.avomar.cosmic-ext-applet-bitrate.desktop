@@ -9,6 +9,7 @@ Keywords=COSMIC
 Keywords[uk]=Космік
 Comment=A Bandwidth Monitor applet for the COSMIC™ desktop
 Comment[cs]=Applet pro sledování šířky pásma v prostředí COSMIC™
+Comment[pl]=Aplet monitorujący transfer danych dla środowiska COSMIC™
 Comment[uk]=Віджет моніторингу мережі COSMIC™
 # Translators: Do NOT translate or transliterate this text (this is an icon file name)!
 Icon=io.github.avomar.cosmic-ext-applet-bitrate
