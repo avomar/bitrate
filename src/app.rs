@@ -10,7 +10,7 @@ use {
         cosmic_config::{self, Config, CosmicConfigEntry},
         cosmic_theme::Spacing,
         iced::{
-            self, Alignment, Limits, Rectangle, Subscription,
+            self, Alignment, Length, Limits, Rectangle, Subscription,
             advanced::graphics::text::cosmic_text::{
                 self, Attrs, Buffer, FontSystem, Metrics, Shaping,
             },
@@ -365,13 +365,23 @@ impl cosmic::Application for AppModel {
             unit_model.activate(bytes_entity);
         }
 
-        // Set initial received and sent bytes
+        // Set initial received and sent bytes.
+        // Prefer the interface saved in config, if it's still present on the system;
+        // otherwise fall back to the first interface the OS reports.
+        // Restore the last picked interface by name (list order isn't
+        // stable across reboots). Falls back to index 0 if nothing saved yet.
         let network_interfaces = network::get_network_interfaces();
-        let mut selected_network_interface: Option<usize> = None;
+        let mut selected_network_interface: Option<usize> = config
+            .network_interface
+            .as_ref()
+            .and_then(|saved| network_interfaces.iter().position(|iface| iface == saved));
+        if selected_network_interface.is_none() && !network_interfaces.is_empty() {
+            selected_network_interface = Some(0);
+        }
         let mut received_bytes = 0;
         let mut sent_bytes = 0;
-        if let Some(interface) = network_interfaces.get(0) {
-            selected_network_interface = Some(0);
+        if let Some(idx) = selected_network_interface {
+            let interface = &network_interfaces[idx];
             received_bytes = network::get_received_bytes(interface).unwrap_or(0);
             sent_bytes = network::get_sent_bytes(interface).unwrap_or(0);
         }
@@ -481,7 +491,7 @@ impl cosmic::Application for AppModel {
         .into()
     }
 
-    fn view_window(&self, _id: window::Id) -> Element<'_, Self::Message> {
+    fn view_window(&self, id: window::Id) -> Element<'_, Self::Message> {
         let Spacing {
             space_xxxs,
             space_xxs,
@@ -491,11 +501,18 @@ impl cosmic::Application for AppModel {
         let content = column!(
             padded_control(widget::settings::item(
                 fl!("network-interface"),
-                dropdown(
+                // Switched dropdown() -> popup_dropdown() here: the inline
+                // dropdown shrinks to content width, so long names like
+                // "br-68e8fae61392" got clipped at the end with no padding.
+                dropdown::popup_dropdown(
                     self.network_interfaces.clone(),
                     self.selected_network_interface,
-                    Message::UpdateSelectedNetworkInterface
+                    Message::UpdateSelectedNetworkInterface,
+                    id,
+                    Message::Surface,
+                    |m| m,
                 )
+                .width(Length::Fill)
             )),
             padded_control(widget::divider::horizontal::default()).padding([space_xxs, space_s]),
             padded_control(
@@ -611,9 +628,14 @@ impl cosmic::Application for AppModel {
             }
             Message::UpdateSelectedNetworkInterface(new_interface) => {
                 self.selected_network_interface = Some(new_interface);
-                let interface = self.network_interfaces.get(0).unwrap();
-                self.received_bytes = network::get_received_bytes(interface).unwrap_or(0);
-                self.sent_bytes = network::get_sent_bytes(interface).unwrap_or(0);
+                if let Some(interface) = self.network_interfaces.get(new_interface) {
+                    self.received_bytes = network::get_received_bytes(interface).unwrap_or(0);
+                    self.sent_bytes = network::get_sent_bytes(interface).unwrap_or(0);
+                    // Save the picked interface so it's restored next launch.
+                    self.config
+                        .set_network_interface(&self.config_helper, Some(interface.clone()))
+                        .unwrap();
+                }
             }
             Message::UnitChanged(entity) => {
                 if !self.unit_model.is_active(entity) {
