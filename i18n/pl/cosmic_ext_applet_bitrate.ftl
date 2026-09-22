@@ -1,0 +1,12 @@
+network-interface = Interfejs Sieciowy
+unit = Jednostka Danych
+bits = Bity
+bytes = Bajty
+update-rate = Częstotliwość Aktualizowania
+show-download-speed = Pokaż Prędkość Pobierania
+show-upload-speed = Pokaż Prędkość Wysyłania
+second-short = s
+kilo-short = K
+mega-short = M
+bytes-short = B
+bits-short = b

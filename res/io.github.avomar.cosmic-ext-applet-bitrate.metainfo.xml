@@ -14,7 +14,9 @@
   <summary
         xml:lang="uk"
     >Віджет моніторингу мережі для середовища COSMIC™</summary>
+  <summary xml:lang="pl">Aplet do monitorowania transferu dla środowiska COSMIC™</summary>
   <description>
+  
     <p
         >A lightweight network bandwidth monitoring applet for the COSMIC desktop environment with UI for customization.</p>
     <p
@@ -23,6 +25,9 @@
     <p
             xml:lang="uk"
         >Легкий і зручний віджет для моніторингу пропускної здатності мережі з інтерфейсом для налаштувань.</p>
+    <p
+            xml:lang="pl"
+        >Lekki aplet do monitorowania ruchu sieciowego dla środowiska graficznego COSMIC z dopasowywalnym interfejsem użytkownika.</p>
   </description>
   <developer id="@aviralomar@fosstodon.org">
     <name>Aviral Omar</name>
@@ -58,6 +63,9 @@
         <caption
                 xml:lang="uk"
             >Розміщений віджет з відкритим вікном перегляду.</caption>
+        <caption
+                xml:lang="pl"
+            >Aplet na górnym panelu z widokiem otwartego okna.</caption>
        </screenshot>
     </screenshots>
   <provides>
@@ -86,6 +94,11 @@
     <keyword>Bandwidth</keyword>
     <keyword>Monitor</keyword>
     <keyword>Network</keyword>
+    <keyword xml:lang="pl">COSMIC</keyword>
+    <keyword xml:lang="pl">Aplet</keyword>
+    <keyword xml:lang="pl">Transfer</keyword>
+    <keyword xml:lang="pl">Monitorowanie</keyword>
+    <keyword xml:lang="pl">Sieć</keyword>
   </keywords>
   <releases>
     <release version="3.0.1" date="2026-08-16">
