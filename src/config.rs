@@ -18,6 +18,8 @@ pub struct BitrateAppletConfig {
     pub update_rate: u8,
     pub show_download_speed: bool,
     pub show_upload_speed: bool,
+    /// Last interface the user picked; None if nothing saved yet.
+    pub network_interface: Option<String>,
 }
 
 impl Default for BitrateAppletConfig {
@@ -27,6 +29,7 @@ impl Default for BitrateAppletConfig {
             update_rate: 1,
             show_download_speed: true,
             show_upload_speed: true,
+            network_interface: None,
         }
     }
 }
