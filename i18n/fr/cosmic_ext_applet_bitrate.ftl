@@ -5,6 +5,7 @@ bytes = Octets
 update-rate = Taux de rafraîchissement
 show-download-speed = Afficher la vitesse de téléchargement
 show-upload-speed = Afficher la vitesse de téléversement
+ignore-docker = Ignorer Docker et les réseaux virtuels
 second-short = s
 kilo-short = K
 mega-short = M
