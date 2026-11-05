@@ -92,12 +92,21 @@ pub enum Message {
 }
 
 impl AppModel {
-    fn select_default_network_interface(&mut self) {
+    fn refresh_network_interfaces(&mut self) {
+        let previous_name = self
+            .selected_network_interface
+            .and_then(|index| self.network_interfaces.get(index).cloned());
+        self.network_interfaces = network::get_network_interfaces(self.config.ignore_docker);
         self.selected_network_interface = network::find_preferred_interface(
             &self.network_interfaces,
             self.config.network_interface.as_deref(),
         );
-        self.update_bandwidth_base();
+        let selected_name = self
+            .selected_network_interface
+            .and_then(|index| self.network_interfaces.get(index));
+        if selected_name != previous_name.as_ref() {
+            self.update_bandwidth_base();
+        }
     }
 
     fn update_bandwidth_base(&mut self) {
@@ -374,7 +383,7 @@ impl cosmic::Application for AppModel {
         }
 
         // Discover network interfaces and select the preferred active interface.
-        // If wired is connected, it takes precedence; otherwise wireless is chosen.
+        // Restore an explicit choice, otherwise follow the default route.
         let network_interfaces = network::get_network_interfaces(config.ignore_docker);
         let selected_network_interface = network::find_preferred_interface(
             &network_interfaces,
@@ -612,43 +621,7 @@ impl cosmic::Application for AppModel {
                     self.upload_speed = 0;
                 }
             }
-            Message::UpdateNetworkInterfaces => {
-                let prev_interfaces = self.network_interfaces.clone();
-                let prev_selected_name = self
-                    .selected_network_interface
-                    .and_then(|idx| prev_interfaces.get(idx).cloned());
-
-                self.network_interfaces =
-                    network::get_network_interfaces(self.config.ignore_docker);
-
-                // Check if a wired interface just became connected
-                let wired_newly_connected = self.network_interfaces.iter().any(|iface| {
-                    network::interface_type(iface) == network::InterfaceType::Wired
-                        && !prev_interfaces.contains(iface)
-                });
-
-                if wired_newly_connected {
-                    // Wired was plugged in: switch to the wired interface
-                    self.selected_network_interface = network::find_preferred_interface(
-                        &self.network_interfaces,
-                        None,
-                    );
-                    self.update_bandwidth_base();
-                } else if let Some(ref prev_name) = prev_selected_name {
-                    if let Some(new_idx) = self
-                        .network_interfaces
-                        .iter()
-                        .position(|iface| iface == prev_name)
-                    {
-                        self.selected_network_interface = Some(new_idx);
-                    } else {
-                        // Previous interface disconnected (e.g. wired unplugged): pick connected interface
-                        self.select_default_network_interface();
-                    }
-                } else {
-                    self.select_default_network_interface();
-                }
-            }
+            Message::UpdateNetworkInterfaces => self.refresh_network_interfaces(),
             Message::UpdateSelectedNetworkInterface(new_interface) => {
                 self.selected_network_interface = Some(new_interface);
                 if let Some(interface) = self.network_interfaces.get(new_interface) {
@@ -664,16 +637,9 @@ impl cosmic::Application for AppModel {
                 self.config
                     .set_ignore_docker(&self.config_helper, ignore)
                     .unwrap();
-                self.network_interfaces = network::get_network_interfaces(ignore);
-                let current_name = self
-                    .selected_network_interface
-                    .and_then(|idx| self.network_interfaces.get(idx).cloned());
-                self.selected_network_interface = network::find_preferred_interface(
-                    &self.network_interfaces,
-                    current_name.as_deref().or(self.config.network_interface.as_deref()),
-                );
-                self.update_bandwidth_base();
+                self.refresh_network_interfaces();
             }
+
             Message::UnitChanged(entity) => {
                 if !self.unit_model.is_active(entity) {
                     self.unit_model.activate(entity);
@@ -718,12 +684,11 @@ impl cosmic::Application for AppModel {
                 }
             },
             Message::UpdateConfig(config) => {
-                let ignore_docker_changed = self.config.ignore_docker != config.ignore_docker;
+                let selection_changed = self.config.ignore_docker != config.ignore_docker
+                    || self.config.network_interface != config.network_interface;
                 self.config = config;
-                if ignore_docker_changed {
-                    self.network_interfaces =
-                        network::get_network_interfaces(self.config.ignore_docker);
-                    self.select_default_network_interface();
+                if selection_changed {
+                    self.refresh_network_interfaces();
                 }
             }
             Message::TogglePopup => {

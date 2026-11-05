@@ -4,6 +4,18 @@ A Bandwidth Monitor applet for the COSMIC™ desktop.
 
 <img width="549" height="571" alt="image" src="https://github.com/Aviral-Omar/bitrate/blob/main/res/screenshots/view_window_expanded.png?raw=true" />
 
+## Network selection
+
+The applet hides Docker interfaces, virtual Ethernet pairs, and network bridges by default.
+Turn off **Ignore Docker & Virtual Networks** to include them in the interface dropdown.
+This only filters the applet's list; it does not disable networking on your system.
+
+Without a saved interface choice, the applet follows the lowest-metric active IPv4
+default route among visible, connected interfaces. If no such route is available,
+it prefers Ethernet, then Wi-Fi. A selection made in the existing dropdown is
+remembered while available; if it disconnects or is hidden, the applet falls back
+to an available connection.
+
 ## Installation
 
 A [justfile](./justfile) is included by default for the [casey/just][just] command runner.
@@ -43,3 +55,7 @@ Developers should install [rustup][rustup] and configure their editor to use [ru
 [rustup]: https://rustup.rs/
 [rust-analyzer]: https://rust-analyzer.github.io/
 [sccache]: https://github.com/mozilla/sccache
+
+Network discovery tests use isolated filesystem fixtures and do not change host
+networking. Run them with `cargo test network::tests` or `./simulate.sh`.
+`./simulate.sh live` launches an interactive mock network session for UI testing.

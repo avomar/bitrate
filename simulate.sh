@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
-MOCK_DIR="/tmp/bitrate_simulation_$$"
+if [ "${1:-}" != "live" ]; then
+    exec cargo test network::tests -- "$@"
+fi
+
+MOCK_DIR="$(mktemp -d /tmp/bitrate-simulation.XXXXXX)"
+APPLET_PID=""
 NET_DIR="$MOCK_DIR/sys/class/net"
 PROC_DIR="$MOCK_DIR/proc/net"
 
@@ -11,7 +16,9 @@ cleanup() {
         kill "$APPLET_PID" 2>/dev/null || true
     fi
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 mkdir -p "$NET_DIR" "$PROC_DIR"
 
@@ -119,22 +126,4 @@ if [ "$1" = "live" ]; then
                 ;;
         esac
     done
-else
-    echo "Running automated real-life simulation test..."
-    echo
-
-    # 1. Initial State: Wi-Fi active, Ethernet unplugged, Docker running
-    echo "[Step 1] Initial state: Wi-Fi active (wlo1), Ethernet unplugged (eno1), Docker running"
-    set_iface "wlo1" "up" "1" "false"
-    set_iface "eno1" "down" "0" "false"
-    set_iface "docker0" "up" "1" "true"
-    set_iface "br-e02939798c38" "up" "1" "true"
-    set_iface "veth8bc1e04" "up" "1" "false"
-    set_route "wlo1" 600
-
-    BITRATE_MOCK_SYSFS="$MOCK_DIR" cargo test test_real_life_simulation_scenario -- --nocapture
-
-    echo
-    echo "All simulation scenarios passed successfully!"
-    echo "Tip: Run './simulate.sh live' to interactively test network events with the UI."
 fi
