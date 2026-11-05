@@ -5,6 +5,7 @@ bytes = Bajty
 update-rate = Frekvence aktualizace
 show-download-speed = Zobrazit rychlost stahování
 show-upload-speed = Zobrazit rychlost odesílání
+ignore-docker = Ignorovat Docker a virtuální sítě
 second-short = s
 kilo-short = K
 mega-short = M

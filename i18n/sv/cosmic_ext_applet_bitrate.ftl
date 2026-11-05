@@ -5,6 +5,7 @@ bytes = Byte
 update-rate = Uppdateringsfrekvens
 show-download-speed = Visa nedladdningshastighet
 show-upload-speed = Visa uppladdningshastighet
+ignore-docker = Ignorera Docker och virtuella nätverk
 second-short = s
 kilo-short = K
 mega-short = M

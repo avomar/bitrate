@@ -20,6 +20,13 @@ pub struct BitrateAppletConfig {
     pub show_upload_speed: bool,
     /// Last interface the user picked; None if nothing saved yet.
     pub network_interface: Option<String>,
+    /// Whether to ignore Docker networks, veths, and virtual bridges.
+    #[serde(default = "default_ignore_docker")]
+    pub ignore_docker: bool,
+}
+
+fn default_ignore_docker() -> bool {
+    true
 }
 
 impl Default for BitrateAppletConfig {
@@ -30,6 +37,7 @@ impl Default for BitrateAppletConfig {
             show_download_speed: true,
             show_upload_speed: true,
             network_interface: None,
+            ignore_docker: true,
         }
     }
 }
